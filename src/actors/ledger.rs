@@ -1,13 +1,13 @@
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
+use ractor::{Actor, ActorProcessingErr, ActorRef};
 
-pub struct WitnessActor;
+pub struct LedgerActor;
 
-pub enum WitnessMessage {
-    ConfirmEvent(RpcReplyPort<Result<(), ()>>),
+pub enum LedgerMessage {
+    SaveEvent(String),
 }
 
-impl Actor for WitnessActor {
-    type Msg = WitnessMessage;
+impl Actor for LedgerActor {
+    type Msg = LedgerMessage;
     type State = ();
     type Arguments = ();
 
@@ -26,9 +26,8 @@ impl Actor for WitnessActor {
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            WitnessMessage::ConfirmEvent(replay) => {
-                println!("Witness: Confirmed event.");
-                replay.send(Ok(())).unwrap();
+            LedgerMessage::SaveEvent(event) => {
+                println!("Ledger: saved event: {}", event);
             }
         }
         Ok(())

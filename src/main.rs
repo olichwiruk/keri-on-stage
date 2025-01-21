@@ -4,12 +4,14 @@ mod actors;
 use actors::{
     event_logger::EventLoggerActor,
     key_manager::{KeyManagerActor, KeyManagerMessage},
+    ledger::LedgerActor,
     witness::WitnessActor,
 };
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = Actor::spawn(Some("witness".to_string()), WitnessActor, ()).await?;
+    let _ = Actor::spawn(Some("ledger".to_string()), LedgerActor, ()).await?;
     let (logger_actor, _) = Actor::spawn(None, EventLoggerActor, ()).await?;
 
     let (key_manager_actor, key_manager_handle) =

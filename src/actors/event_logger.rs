@@ -1,5 +1,5 @@
-use super::witness::WitnessMessage;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use super::{ledger::LedgerMessage, witness::WitnessMessage};
+use ractor::{call, Actor, ActorProcessingErr, ActorRef};
 
 pub struct EventLoggerActor;
 
@@ -33,7 +33,16 @@ impl Actor for EventLoggerActor {
                     ractor::registry::where_is("witness".to_string())
                         .unwrap()
                         .into();
-                witness.cast(WitnessMessage::ConfirmEvent)?;
+                let ledger: ActorRef<LedgerMessage> =
+                    ractor::registry::where_is("ledger".to_string())
+                        .unwrap()
+                        .into();
+
+                let result = call!(witness, WitnessMessage::ConfirmEvent)?;
+                if let Ok(()) = result {
+                    println!("EventLogger: Witness confirmed event.");
+                    ledger.cast(LedgerMessage::SaveEvent(event))?;
+                }
             }
         }
 
