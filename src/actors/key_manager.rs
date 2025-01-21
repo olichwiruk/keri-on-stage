@@ -4,7 +4,7 @@ use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
 pub struct KeyManagerActor;
 
 pub enum KeyManagerMessage {
-    CreateEvent(RpcReplyPort<Result<KeyEvent, ()>>),
+    Create(RpcReplyPort<Result<KeyEvent, ()>>),
 }
 
 impl Actor for KeyManagerActor {
@@ -27,7 +27,7 @@ impl Actor for KeyManagerActor {
         _: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            KeyManagerMessage::CreateEvent(reply) => {
+            KeyManagerMessage::Create(reply) => {
                 let event = KeyEvent {
                     event_type: KeyEventType::Inception,
                 };

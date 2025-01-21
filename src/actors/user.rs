@@ -43,7 +43,7 @@ impl Actor for UserActor {
                     registry::where_is("logger".to_string()).unwrap().into();
 
                 let result =
-                    call!(key_manager, KeyManagerMessage::CreateEvent)?;
+                    call!(key_manager, KeyManagerMessage::Create)?;
                 if let Ok(event) = result {
                     println!("User: Created key: {:?}", event);
                     state.kel.add_event(event);
