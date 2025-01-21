@@ -1,6 +1,6 @@
 use super::{event_logger::EventLoggerMessage, key_manager::KeyManagerMessage};
 use crate::key::KeyEventLog;
-use ractor::{call, Actor, ActorProcessingErr, ActorRef};
+use ractor::{call, registry, Actor, ActorProcessingErr, ActorRef};
 
 pub struct UserActor;
 
@@ -10,26 +10,20 @@ pub enum UserMessage {
 
 pub struct UserState {
     kel: KeyEventLog,
-    key_manager: ActorRef<KeyManagerMessage>,
-    logger: ActorRef<EventLoggerMessage>,
 }
 
 impl Actor for UserActor {
     type Msg = UserMessage;
     type State = UserState;
-    type Arguments = (ActorRef<KeyManagerMessage>, ActorRef<EventLoggerMessage>);
+    type Arguments = ();
 
     async fn pre_start(
         &self,
         _: ActorRef<Self::Msg>,
-        args: Self::Arguments,
+        _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (key_manager, logger) = args;
-
         Ok(Self::State {
             kel: KeyEventLog::new(),
-            key_manager,
-            logger,
         })
     }
 
@@ -41,12 +35,19 @@ impl Actor for UserActor {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             UserMessage::CreateKey => {
+                let key_manager: ActorRef<KeyManagerMessage> =
+                    registry::where_is("key_manager".to_string())
+                        .unwrap()
+                        .into();
+                let logger: ActorRef<EventLoggerMessage> =
+                    registry::where_is("logger".to_string()).unwrap().into();
+
                 let result =
-                    call!(state.key_manager, KeyManagerMessage::CreateEvent)?;
+                    call!(key_manager, KeyManagerMessage::CreateEvent)?;
                 if let Ok(event) = result {
                     println!("User: Created key: {:?}", event);
                     state.kel.add_event(event);
-                    state.logger.cast(EventLoggerMessage::LogEvent(event))?;
+                    logger.cast(EventLoggerMessage::LogEvent(event))?;
                 }
             }
         }
