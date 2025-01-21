@@ -1,4 +1,4 @@
-use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
+use ractor::{pg, Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
 
 pub struct WitnessActor;
 
@@ -13,9 +13,10 @@ impl Actor for WitnessActor {
 
     async fn pre_start(
         &self,
-        _: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        pg::join("witnesses".to_string(), vec![myself.get_cell()]);
         Ok(())
     }
 

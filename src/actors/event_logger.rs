@@ -1,6 +1,6 @@
 use super::{ledger::LedgerMessage, witness::WitnessMessage};
 use crate::key::KeyEvent;
-use ractor::{call, Actor, ActorProcessingErr, ActorRef};
+use ractor::{call, pg, Actor, ActorProcessingErr, ActorRef};
 
 pub struct EventLoggerActor;
 
@@ -30,19 +30,22 @@ impl Actor for EventLoggerActor {
         match message {
             EventLoggerMessage::LogEvent(event) => {
                 println!("EventLogger: Logged event: {:?}", event);
+                let witnesses = pg::get_members(&"witnesses".to_string());
                 let witness: ActorRef<WitnessMessage> =
-                    ractor::registry::where_is("witness".to_string())
-                        .unwrap()
-                        .into();
-                let ledger: ActorRef<LedgerMessage> =
-                    ractor::registry::where_is("ledger".to_string())
-                        .unwrap()
-                        .into();
+                    witnesses.first().unwrap().clone().into();
+
+                let ledgers: Vec<ActorRef<LedgerMessage>> =
+                    pg::get_members(&"ledgers".to_string())
+                        .iter_mut()
+                        .map(|l| l.clone().into())
+                        .collect();
 
                 let result = call!(witness, WitnessMessage::ConfirmEvent)?;
                 if let Ok(()) = result {
                     println!("EventLogger: Witness confirmed event.");
-                    ledger.cast(LedgerMessage::SaveEvent(event))?;
+                    ledgers.iter().for_each(|ledger| {
+                        ledger.cast(LedgerMessage::SaveEvent(event)).unwrap();
+                    });
                 }
             }
         }

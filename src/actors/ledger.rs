@@ -1,5 +1,5 @@
 use crate::key::KeyEvent;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use ractor::{pg, Actor, ActorProcessingErr, ActorRef};
 
 pub struct LedgerActor;
 
@@ -14,9 +14,10 @@ impl Actor for LedgerActor {
 
     async fn pre_start(
         &self,
-        _: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        pg::join("ledgers".to_string(), vec![myself.get_cell()]);
         Ok(())
     }
 
