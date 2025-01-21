@@ -16,10 +16,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = Actor::spawn(Some("ledger".to_string()), LedgerActor, ()).await?;
     let (logger_actor, _) = Actor::spawn(None, EventLoggerActor, ()).await?;
     let (key_manager_actor, _) =
-        Actor::spawn(None, KeyManagerActor, logger_actor).await?;
+        Actor::spawn(None, KeyManagerActor, ()).await?;
 
     let (user_actor, user_handle) =
-        Actor::spawn(None, UserActor, key_manager_actor).await?;
+        Actor::spawn(None, UserActor, (key_manager_actor, logger_actor))
+            .await?;
 
     user_actor.cast(UserMessage::CreateKey)?;
 
