@@ -1,0 +1,6 @@
+[package]
+name = "keri-on-stage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
