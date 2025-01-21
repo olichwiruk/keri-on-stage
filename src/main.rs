@@ -1,10 +1,12 @@
 use ractor::Actor;
 
 mod actors;
+mod key;
 use actors::{
     event_logger::EventLoggerActor,
-    key_manager::{KeyManagerActor, KeyManagerMessage},
+    key_manager::KeyManagerActor,
     ledger::LedgerActor,
+    user::{UserActor, UserMessage},
     witness::WitnessActor,
 };
 
@@ -13,15 +15,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = Actor::spawn(Some("witness".to_string()), WitnessActor, ()).await?;
     let _ = Actor::spawn(Some("ledger".to_string()), LedgerActor, ()).await?;
     let (logger_actor, _) = Actor::spawn(None, EventLoggerActor, ()).await?;
-
-    let (key_manager_actor, key_manager_handle) =
+    let (key_manager_actor, _) =
         Actor::spawn(None, KeyManagerActor, logger_actor).await?;
 
-    key_manager_actor.cast(KeyManagerMessage::CreateEvent)?;
+    let (user_actor, user_handle) =
+        Actor::spawn(None, UserActor, key_manager_actor).await?;
+
+    user_actor.cast(UserMessage::CreateKey)?;
 
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    key_manager_actor.stop(None);
-    key_manager_handle.await?;
+    user_actor.stop(None);
+    user_handle.await?;
 
     Ok(())
 }

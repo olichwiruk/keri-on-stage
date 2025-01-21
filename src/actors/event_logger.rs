@@ -1,10 +1,11 @@
 use super::{ledger::LedgerMessage, witness::WitnessMessage};
+use crate::key::KeyEvent;
 use ractor::{call, Actor, ActorProcessingErr, ActorRef};
 
 pub struct EventLoggerActor;
 
 pub enum EventLoggerMessage {
-    LogEvent(String),
+    LogEvent(KeyEvent),
 }
 
 impl Actor for EventLoggerActor {
@@ -28,7 +29,7 @@ impl Actor for EventLoggerActor {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             EventLoggerMessage::LogEvent(event) => {
-                println!("EventLogger: Logged event: {}", event);
+                println!("EventLogger: Logged event: {:?}", event);
                 let witness: ActorRef<WitnessMessage> =
                     ractor::registry::where_is("witness".to_string())
                         .unwrap()

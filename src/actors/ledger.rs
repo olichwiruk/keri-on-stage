@@ -1,9 +1,10 @@
+use crate::key::KeyEvent;
 use ractor::{Actor, ActorProcessingErr, ActorRef};
 
 pub struct LedgerActor;
 
 pub enum LedgerMessage {
-    SaveEvent(String),
+    SaveEvent(KeyEvent),
 }
 
 impl Actor for LedgerActor {
@@ -27,7 +28,7 @@ impl Actor for LedgerActor {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             LedgerMessage::SaveEvent(event) => {
-                println!("Ledger: saved event: {}", event);
+                println!("Ledger: saved event: {:?}", event);
             }
         }
         Ok(())

@@ -1,10 +1,11 @@
 use super::event_logger::EventLoggerMessage;
-use ractor::{Actor, ActorProcessingErr, ActorRef};
+use crate::key::{KeyEvent, KeyEventType};
+use ractor::{Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
 
 pub struct KeyManagerActor;
 
 pub enum KeyManagerMessage {
-    CreateEvent,
+    CreateEvent(RpcReplyPort<Result<KeyEvent, ()>>),
 }
 
 pub struct KeyManagerState {
@@ -31,10 +32,13 @@ impl Actor for KeyManagerActor {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            KeyManagerMessage::CreateEvent => {
-                let event = "Inception Event".to_string();
-                println!("KeyManager: Created event: {}", event);
+            KeyManagerMessage::CreateEvent(reply) => {
+                let event = KeyEvent {
+                    event_type: KeyEventType::Inception,
+                };
+                println!("KeyManager: Created event: {:?}", event);
                 state.logger.cast(EventLoggerMessage::LogEvent(event))?;
+                reply.send(Ok(event)).unwrap();
             }
         }
 
