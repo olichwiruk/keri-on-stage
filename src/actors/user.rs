@@ -1,15 +1,17 @@
-use super::{event_logger::EventLoggerMessage, key_manager::KeyManagerMessage};
-use crate::key::{KeyEvent, KeyEventLog};
-use ractor::{
-    call, registry, Actor, ActorProcessingErr, ActorRef, RpcReplyPort,
+use super::{
+    event_logger::EventLoggerMessage,
+    key_manager::{KeyManagerEvent, KeyManagerMessage},
+    SystemMessage,
 };
+use crate::{actors::broker::BrokerMessage, key::KeyEventLog};
+use ractor::{registry, Actor, ActorProcessingErr, ActorRef};
 
 pub struct UserActor;
 
+#[derive(Debug, Clone)]
 pub enum UserMessage {
     CreateKey,
     RotateKey,
-    ListEvents(RpcReplyPort<Vec<KeyEvent>>),
 }
 
 pub struct UserState {
@@ -17,15 +19,18 @@ pub struct UserState {
 }
 
 impl Actor for UserActor {
-    type Msg = UserMessage;
+    type Msg = SystemMessage;
     type State = UserState;
     type Arguments = ();
 
     async fn pre_start(
         &self,
-        _: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
+        let broker = registry::where_is("broker".to_string()).unwrap();
+        broker.send_message(BrokerMessage::Subscribe(myself))?;
+
         Ok(Self::State {
             kel: KeyEventLog::new(),
         })
@@ -33,43 +38,53 @@ impl Actor for UserActor {
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        match message {
-            UserMessage::CreateKey => {
-                let key_manager: ActorRef<KeyManagerMessage> =
-                    registry::where_is("key_manager".to_string())
-                        .unwrap()
-                        .into();
-                let logger: ActorRef<EventLoggerMessage> =
-                    registry::where_is("logger".to_string()).unwrap().into();
+        if let SystemMessage::User(msg) = message {
+            let broker: ActorRef<BrokerMessage> =
+                registry::where_is("broker".to_string()).unwrap().into();
 
-                let result = call!(key_manager, KeyManagerMessage::Create)?;
-                if let Ok(event) = result {
-                    println!("User: Created key: {:?}", event);
-                    state.kel.add_event(event);
-                    logger.cast(EventLoggerMessage::LogEvent(event))?;
+            match msg {
+                UserMessage::CreateKey => {
+                    let id = &myself.get_id();
+                    broker.cast(BrokerMessage::Publish(
+                        SystemMessage::KeyManager(KeyManagerMessage::Create(
+                            id.node(),
+                            id.pid(),
+                        )),
+                    ))?;
+                }
+                UserMessage::RotateKey => {
+                    let id = &myself.get_id();
+                    broker.cast(BrokerMessage::Publish(
+                        SystemMessage::KeyManager(KeyManagerMessage::Rotate(
+                            id.node(),
+                            id.pid(),
+                        )),
+                    ))?;
                 }
             }
-            UserMessage::RotateKey => {
-                let key_manager: ActorRef<KeyManagerMessage> =
-                    registry::where_is("key_manager".to_string())
-                        .unwrap()
-                        .into();
-                let logger: ActorRef<EventLoggerMessage> =
-                    registry::where_is("logger".to_string()).unwrap().into();
-
-                let result = call!(key_manager, KeyManagerMessage::Rotate)?;
-                if let Ok(event) = result {
-                    println!("User: Created key: {:?}", event);
+        } else if let SystemMessage::KeyManagerEvent(sys_event) = message {
+            let broker: ActorRef<BrokerMessage> =
+                registry::where_is("broker".to_string()).unwrap().into();
+            match sys_event {
+                KeyManagerEvent::Created(node, pid, event)
+                | KeyManagerEvent::Rotated(node, pid, event) => {
+                    let id = &myself.get_id();
+                    if node != id.node() || pid != id.pid() {
+                        return Ok(());
+                    }
                     state.kel.add_event(event);
-                    logger.cast(EventLoggerMessage::LogEvent(event))?;
+                    broker.cast(BrokerMessage::Publish(
+                        SystemMessage::EventLogger(
+                            EventLoggerMessage::LogEvent(event),
+                        ),
+                    ))?;
+
+                    println!("User {} kel: {:#?}", id, state.kel.events);
                 }
-            }
-            UserMessage::ListEvents(reply) => {
-                reply.send(state.kel.get_events()).unwrap();
             }
         }
 

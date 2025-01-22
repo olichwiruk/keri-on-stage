@@ -1,13 +1,23 @@
-use ractor::{pg, Actor, ActorProcessingErr, ActorRef, RpcReplyPort};
+use ractor::{registry, Actor, ActorProcessingErr, ActorRef};
+
+use crate::key::KeyEvent;
+
+use super::{broker::BrokerMessage, SystemMessage};
 
 pub struct WitnessActor;
 
+#[derive(Debug, Clone)]
 pub enum WitnessMessage {
-    ConfirmEvent(RpcReplyPort<Result<(), ()>>),
+    ConfirmEvent(u64, u64, KeyEvent),
+}
+
+#[derive(Debug, Clone)]
+pub enum WitnessEvent {
+    EventConfirmed(u64, u64, KeyEvent),
 }
 
 impl Actor for WitnessActor {
-    type Msg = WitnessMessage;
+    type Msg = SystemMessage;
     type State = ();
     type Arguments = ();
 
@@ -16,7 +26,10 @@ impl Actor for WitnessActor {
         myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        pg::join("witnesses".to_string(), vec![myself.get_cell()]);
+        let broker = registry::where_is("broker".to_string()).unwrap();
+        broker
+            .send_message(BrokerMessage::Subscribe(myself))
+            .unwrap();
         Ok(())
     }
 
@@ -26,10 +39,15 @@ impl Actor for WitnessActor {
         message: Self::Msg,
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        match message {
-            WitnessMessage::ConfirmEvent(replay) => {
-                println!("Witness: Confirmed event.");
-                replay.send(Ok(())).unwrap();
+        if let SystemMessage::Witness(msg) = message {
+            let broker = registry::where_is("broker".to_string()).unwrap();
+            match msg {
+                WitnessMessage::ConfirmEvent(node, pid, event) => broker
+                    .send_message(BrokerMessage::Publish(
+                        SystemMessage::WitnessEvent(
+                            WitnessEvent::EventConfirmed(node, pid, event),
+                        ),
+                    ))?,
             }
         }
         Ok(())

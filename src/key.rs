@@ -21,8 +21,4 @@ impl KeyEventLog {
     pub fn add_event(&mut self, event: KeyEvent) {
         self.events.push(event);
     }
-
-    pub fn get_events(&self) -> Vec<KeyEvent> {
-        self.events.clone()
-    }
 }

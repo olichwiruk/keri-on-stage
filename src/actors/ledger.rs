@@ -1,14 +1,17 @@
 use crate::key::KeyEvent;
-use ractor::{pg, Actor, ActorProcessingErr, ActorRef};
+use ractor::{registry, Actor, ActorProcessingErr, ActorRef};
+
+use super::{broker::BrokerMessage, SystemMessage};
 
 pub struct LedgerActor;
 
+#[derive(Debug, Clone)]
 pub enum LedgerMessage {
     SaveEvent(KeyEvent),
 }
 
 impl Actor for LedgerActor {
-    type Msg = LedgerMessage;
+    type Msg = SystemMessage;
     type State = ();
     type Arguments = ();
 
@@ -17,7 +20,10 @@ impl Actor for LedgerActor {
         myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        pg::join("ledgers".to_string(), vec![myself.get_cell()]);
+        let broker = registry::where_is("broker".to_string()).unwrap();
+        broker
+            .send_message(BrokerMessage::Subscribe(myself))
+            .unwrap();
         Ok(())
     }
 
@@ -27,9 +33,11 @@ impl Actor for LedgerActor {
         message: Self::Msg,
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        match message {
-            LedgerMessage::SaveEvent(event) => {
-                println!("Ledger: saved event: {:?}", event);
+        if let SystemMessage::Ledger(msg) = message {
+            match msg {
+                LedgerMessage::SaveEvent(event) => {
+                    println!("Ledger: saved event: {:?}", event);
+                }
             }
         }
         Ok(())
