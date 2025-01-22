@@ -21,6 +21,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (user_actor, user_handle) = Actor::spawn(None, UserActor, ()).await?;
     user_actor.cast(UserMessage::CreateKey)?;
+    user_actor.cast(UserMessage::RotateKey)?;
+    let kel = ractor::call!(user_actor, UserMessage::ListEvents)?;
+    println!("User: KeyEventLog: {:?}", kel);
 
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     user_actor.stop(None);

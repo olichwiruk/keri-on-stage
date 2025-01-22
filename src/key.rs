@@ -6,10 +6,11 @@ pub struct KeyEvent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeyEventType {
     Inception,
+    Rotation,
 }
 
 pub struct KeyEventLog {
-    events: Vec<KeyEvent>,
+    pub events: Vec<KeyEvent>,
 }
 
 impl KeyEventLog {
@@ -19,5 +20,9 @@ impl KeyEventLog {
 
     pub fn add_event(&mut self, event: KeyEvent) {
         self.events.push(event);
+    }
+
+    pub fn get_events(&self) -> Vec<KeyEvent> {
+        self.events.clone()
     }
 }

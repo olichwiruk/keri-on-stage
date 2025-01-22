@@ -5,6 +5,7 @@ pub struct KeyManagerActor;
 
 pub enum KeyManagerMessage {
     Create(RpcReplyPort<Result<KeyEvent, ()>>),
+    Rotate(RpcReplyPort<Result<KeyEvent, ()>>),
 }
 
 impl Actor for KeyManagerActor {
@@ -32,6 +33,13 @@ impl Actor for KeyManagerActor {
                     event_type: KeyEventType::Inception,
                 };
                 println!("KeyManager: Created event: {:?}", event);
+                reply.send(Ok(event)).unwrap();
+            }
+            KeyManagerMessage::Rotate(reply) => {
+                let event = KeyEvent {
+                    event_type: KeyEventType::Rotation,
+                };
+                println!("KeyManager: Rotated event: {:?}", event);
                 reply.send(Ok(event)).unwrap();
             }
         }
