@@ -3,8 +3,8 @@ use super::{
     key_manager::{KeyManagerEvent, KeyManagerMessage},
     SystemMessage,
 };
-use crate::{actors::broker::BrokerMessage, key::KeyEventLog};
-use ractor::{registry, Actor, ActorProcessingErr, ActorRef};
+use crate::key::KeyEventLog;
+use ractor::{pg, Actor, ActorProcessingErr, ActorRef};
 
 pub struct UserActor;
 
@@ -25,12 +25,9 @@ impl Actor for UserActor {
 
     async fn pre_start(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let broker = registry::where_is("broker".to_string()).unwrap();
-        broker.send_message(BrokerMessage::Subscribe(myself))?;
-
         Ok(Self::State {
             kel: KeyEventLog::new(),
         })
@@ -43,47 +40,39 @@ impl Actor for UserActor {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         if let SystemMessage::User(msg) = message {
-            let broker: ActorRef<BrokerMessage> =
-                registry::where_is("broker".to_string()).unwrap().into();
-
             match msg {
                 UserMessage::CreateKey => {
-                    let id = &myself.get_id();
-                    broker.cast(BrokerMessage::Publish(
-                        SystemMessage::KeyManager(KeyManagerMessage::Create(
-                            id.node(),
-                            id.pid(),
-                        )),
-                    ))?;
+                    pg::get_members(&"KeyManagerMessage::Create".to_string())
+                        .iter()
+                        .for_each(|cell| {
+                            cell.send_message(SystemMessage::KeyManager(
+                                KeyManagerMessage::Create(myself.clone()),
+                            )).unwrap();
+                        });
                 }
                 UserMessage::RotateKey => {
-                    let id = &myself.get_id();
-                    broker.cast(BrokerMessage::Publish(
-                        SystemMessage::KeyManager(KeyManagerMessage::Rotate(
-                            id.node(),
-                            id.pid(),
-                        )),
-                    ))?;
+                    pg::get_members(&"KeyManagerMessage::Rotate".to_string())
+                        .iter()
+                        .for_each(|cell| {
+                            cell.send_message(SystemMessage::KeyManager(
+                                KeyManagerMessage::Rotate(myself.clone()),
+                            )).unwrap();
+                        });
                 }
             }
         } else if let SystemMessage::KeyManagerEvent(sys_event) = message {
-            let broker: ActorRef<BrokerMessage> =
-                registry::where_is("broker".to_string()).unwrap().into();
             match sys_event {
-                KeyManagerEvent::Created(node, pid, event)
-                | KeyManagerEvent::Rotated(node, pid, event) => {
-                    let id = &myself.get_id();
-                    if node != id.node() || pid != id.pid() {
-                        return Ok(());
-                    }
+                KeyManagerEvent::Created(event) 
+                | KeyManagerEvent::Rotated(event) => {
+                    println!("User {} received event: {:?}", myself.get_id(), event);
                     state.kel.add_event(event);
-                    broker.cast(BrokerMessage::Publish(
-                        SystemMessage::EventLogger(
-                            EventLoggerMessage::LogEvent(event),
-                        ),
-                    ))?;
-
-                    println!("User {} kel: {:#?}", id, state.kel.events);
+                    pg::get_members(&"EventLoggerMessage::LogEvent".to_string())
+                        .iter()
+                        .for_each(|cell| {
+                            cell.send_message(SystemMessage::EventLogger(
+                                EventLoggerMessage::LogEvent(event),
+                            )).unwrap();
+                        });
                 }
             }
         }

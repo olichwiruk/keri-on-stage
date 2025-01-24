@@ -1,20 +1,20 @@
 use crate::key::{KeyEvent, KeyEventType};
-use ractor::{registry, Actor, ActorProcessingErr, ActorRef};
+use ractor::{pg, Actor, ActorProcessingErr, ActorRef};
 
-use super::{broker::BrokerMessage, SystemMessage};
+use super::SystemMessage;
 
 pub struct KeyManagerActor;
 
 #[derive(Debug, Clone)]
 pub enum KeyManagerMessage {
-    Create(u64, u64),
-    Rotate(u64, u64),
+    Create(ActorRef<SystemMessage>),
+    Rotate(ActorRef<SystemMessage>),
 }
 
 #[derive(Debug, Clone)]
 pub enum KeyManagerEvent {
-    Created(u64, u64, KeyEvent),
-    Rotated(u64, u64, KeyEvent),
+    Created(KeyEvent),
+    Rotated(KeyEvent),
 }
 
 impl Actor for KeyManagerActor {
@@ -27,8 +27,8 @@ impl Actor for KeyManagerActor {
         myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let broker = registry::where_is("broker".to_string()).unwrap();
-        broker.send_message(BrokerMessage::Subscribe(myself))?;
+        pg::join("KeyManagerMessage::Create".to_string(), vec![myself.get_cell()]);
+        pg::join("KeyManagerMessage::Rotate".to_string(), vec![myself.get_cell()]);
 
         Ok(())
     }
@@ -41,29 +41,25 @@ impl Actor for KeyManagerActor {
     ) -> Result<(), ActorProcessingErr> {
         if let SystemMessage::KeyManager(msg) = message {
             match msg {
-                KeyManagerMessage::Create(node, pid) => {
+                KeyManagerMessage::Create(sender) => {
                     let event = KeyEvent {
                         event_type: KeyEventType::Inception,
                     };
-                    let broker =
-                        registry::where_is("broker".to_string()).unwrap();
-                    broker.send_message(BrokerMessage::Publish(
+                    sender.cast(
                         SystemMessage::KeyManagerEvent(
-                            KeyManagerEvent::Created(node, pid, event),
+                            KeyManagerEvent::Created(event),
                         ),
-                    ))?
+                    )?
                 }
-                KeyManagerMessage::Rotate(node, pid) => {
+                KeyManagerMessage::Rotate(sender) => {
                     let event = KeyEvent {
                         event_type: KeyEventType::Rotation,
                     };
-                    let broker =
-                        registry::where_is("broker".to_string()).unwrap();
-                    broker.send_message(BrokerMessage::Publish(
+                    sender.cast(
                         SystemMessage::KeyManagerEvent(
-                            KeyManagerEvent::Rotated(node, pid, event),
+                            KeyManagerEvent::Rotated(event),
                         ),
-                    ))?
+                    )?
                 }
             }
         }

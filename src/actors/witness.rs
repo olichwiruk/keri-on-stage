@@ -1,19 +1,19 @@
-use ractor::{registry, Actor, ActorProcessingErr, ActorRef};
+use ractor::{pg, Actor, ActorProcessingErr, ActorRef};
 
 use crate::key::KeyEvent;
 
-use super::{broker::BrokerMessage, SystemMessage};
+use super::SystemMessage;
 
 pub struct WitnessActor;
 
 #[derive(Debug, Clone)]
 pub enum WitnessMessage {
-    ConfirmEvent(u64, u64, KeyEvent),
+    ConfirmEvent(ActorRef<SystemMessage>, KeyEvent),
 }
 
 #[derive(Debug, Clone)]
 pub enum WitnessEvent {
-    EventConfirmed(u64, u64, KeyEvent),
+    EventConfirmed(KeyEvent),
 }
 
 impl Actor for WitnessActor {
@@ -26,10 +26,10 @@ impl Actor for WitnessActor {
         myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let broker = registry::where_is("broker".to_string()).unwrap();
-        broker
-            .send_message(BrokerMessage::Subscribe(myself))
-            .unwrap();
+        pg::join(
+            "WitnessMessage::ConfirmEvent".to_string(),
+            vec![myself.get_cell()],
+        );
         Ok(())
     }
 
@@ -40,14 +40,12 @@ impl Actor for WitnessActor {
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         if let SystemMessage::Witness(msg) = message {
-            let broker = registry::where_is("broker".to_string()).unwrap();
             match msg {
-                WitnessMessage::ConfirmEvent(node, pid, event) => broker
-                    .send_message(BrokerMessage::Publish(
-                        SystemMessage::WitnessEvent(
-                            WitnessEvent::EventConfirmed(node, pid, event),
-                        ),
-                    ))?,
+                WitnessMessage::ConfirmEvent(sender, event) => {
+                    sender.cast(SystemMessage::WitnessEvent(
+                        WitnessEvent::EventConfirmed(event),
+                    ))?
+                }
             }
         }
         Ok(())

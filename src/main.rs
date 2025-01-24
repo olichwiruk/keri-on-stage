@@ -3,7 +3,6 @@ use ractor::Actor;
 mod actors;
 mod key;
 use actors::{
-    broker::BrokerActor,
     event_logger::EventLoggerActor,
     key_manager::KeyManagerActor,
     ledger::LedgerActor,
@@ -14,8 +13,6 @@ use actors::{
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = Actor::spawn(Some("broker".to_string()), BrokerActor, ()).await?;
-
     let _ = Actor::spawn(None, WitnessActor, ()).await?;
     let _ = Actor::spawn(None, LedgerActor, ()).await?;
     let _ = Actor::spawn(None, EventLoggerActor, ()).await?;

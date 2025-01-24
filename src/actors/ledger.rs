@@ -1,7 +1,7 @@
 use crate::key::KeyEvent;
-use ractor::{registry, Actor, ActorProcessingErr, ActorRef};
+use ractor::{pg, Actor, ActorProcessingErr, ActorRef};
 
-use super::{broker::BrokerMessage, SystemMessage};
+use super::SystemMessage;
 
 pub struct LedgerActor;
 
@@ -20,10 +20,7 @@ impl Actor for LedgerActor {
         myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let broker = registry::where_is("broker".to_string()).unwrap();
-        broker
-            .send_message(BrokerMessage::Subscribe(myself))
-            .unwrap();
+        pg::join("LedgerMessage::SaveEvent".to_string(), vec![myself.get_cell()]);
         Ok(())
     }
 

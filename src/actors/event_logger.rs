@@ -1,11 +1,10 @@
 use super::{
-    broker::BrokerMessage,
     ledger::LedgerMessage,
     witness::{WitnessEvent, WitnessMessage},
     SystemMessage,
 };
 use crate::key::KeyEvent;
-use ractor::{registry, Actor, ActorProcessingErr, ActorRef};
+use ractor::{pg, Actor, ActorProcessingErr, ActorRef};
 
 pub struct EventLoggerActor;
 
@@ -24,10 +23,14 @@ impl Actor for EventLoggerActor {
         myself: ActorRef<Self::Msg>,
         _: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let broker = registry::where_is("broker".to_string()).unwrap();
-        broker
-            .send_message(BrokerMessage::Subscribe(myself))
-            .unwrap();
+        pg::join(
+            "EventLoggerMessage::LogEvent".to_string(),
+            vec![myself.get_cell()],
+        );
+        pg::join(
+            "WitnessEvent::EventConfirmed".to_string(),
+            vec![myself.get_cell()],
+        );
         Ok(())
     }
 
@@ -38,38 +41,31 @@ impl Actor for EventLoggerActor {
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         if let SystemMessage::EventLogger(msg) = message {
-            let broker = registry::where_is("broker".to_string()).unwrap();
             match msg {
                 EventLoggerMessage::LogEvent(event) => {
-                    let id = &myself.get_id();
-                    broker
-                        .send_message(BrokerMessage::Publish(
-                            SystemMessage::Witness(
-                                WitnessMessage::ConfirmEvent(
-                                    id.node(),
-                                    id.pid(),
-                                    event,
-                                ),
-                            ),
+                    pg::get_members(
+                        &"WitnessMessage::ConfirmEvent".to_string(),
+                    )
+                    .iter()
+                    .for_each(|cell| {
+                        cell.send_message(SystemMessage::Witness(
+                            WitnessMessage::ConfirmEvent(myself.clone(), event),
                         ))
                         .unwrap();
+                    });
                 }
             }
         } else if let SystemMessage::WitnessEvent(sys_event) = message {
-            let broker = registry::where_is("broker".to_string()).unwrap();
             match sys_event {
-                WitnessEvent::EventConfirmed(node, pid, event) => {
-                    let id = &myself.get_id();
-                    if node != id.node() || pid != id.pid() {
-                        return Ok(());
-                    }
-                    broker
-                        .send_message(BrokerMessage::Publish(
-                            SystemMessage::Ledger(LedgerMessage::SaveEvent(
-                                event,
-                            )),
-                        ))
-                        .unwrap();
+                WitnessEvent::EventConfirmed(event) => {
+                    pg::get_members(&"LedgerMessage::SaveEvent".to_string())
+                        .iter()
+                        .for_each(|cell| {
+                            cell.send_message(SystemMessage::Ledger(
+                                LedgerMessage::SaveEvent(event),
+                            ))
+                            .unwrap();
+                        });
                 }
             }
         }
