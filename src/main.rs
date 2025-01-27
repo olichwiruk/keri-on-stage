@@ -5,7 +5,7 @@ mod key;
 use actors::{
     event_logger::EventLoggerActor,
     key_manager::KeyManagerActor,
-    ledger::LedgerActor,
+    ledger::{self, LedgerActor},
     user::{UserActor, UserMessage},
     witness::WitnessActor,
     SystemMessage,
@@ -14,7 +14,7 @@ use actors::{
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = Actor::spawn(None, WitnessActor, ()).await?;
-    let _ = Actor::spawn(None, LedgerActor, ()).await?;
+    let _ = Actor::spawn(None, LedgerActor::new(), ledger::JsonParser).await?;
     let _ = Actor::spawn(None, EventLoggerActor, ()).await?;
     let _ = Actor::spawn(None, KeyManagerActor, ()).await?;
 
